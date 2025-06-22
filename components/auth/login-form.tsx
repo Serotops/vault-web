@@ -6,11 +6,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { cn } from '@/lib/utils'
 
 interface LoginFormProps {
   className?: string
@@ -41,98 +38,85 @@ export function LoginForm({ className, redirectTo = '/' }: LoginFormProps) {
       setIsLoading(false)
     }
   }
-
   return (
-    <Card className={cn("w-full max-w-md", className)}>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl text-center">Sign in</CardTitle>
-        <CardDescription className="text-center">
-          Enter your email and password to access your account
-        </CardDescription>
-      </CardHeader>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {error && (
+        <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 rounded-2xl p-4">
+          <div className="text-sm text-red-700 font-medium">
+            ❌ {error}
+          </div>
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+      <div className="space-y-5">
+        <div>
+          <Label htmlFor="email" className="text-slate-700 font-medium mb-2 block">
+            Email Address
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={isLoading}
+            className="h-12 rounded-xl border-slate-200 bg-white/50 backdrop-blur-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all"
+          />
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+        <div>
+          <Label htmlFor="password" className="text-slate-700 font-medium mb-2 block">
+            Password
+          </Label>
+          <div className="relative">
             <Input
-              id="email"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
+              className="h-12 rounded-xl border-slate-200 bg-white/50 backdrop-blur-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all pr-12"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="pr-10"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col space-y-4">
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading || !email || !password}
-          >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
-          </Button>
-
-          <div className="text-center space-y-2">
-            <Link
-              href="/auth/forgot-password"
-              className="text-sm text-blue-600 hover:underline"
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-12 px-4 hover:bg-transparent text-slate-500 hover:text-slate-700"
+              onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading}
             >
-              Forgot your password?
-            </Link>
-
-            <p className="text-sm text-gray-600">
-              Don\'t have an account?{' '}
-              <Link
-                href="/auth/register"
-                className="text-blue-600 hover:underline"
-              >
-                Sign up
-              </Link>
-            </p>
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        </CardFooter>
-      </form>
-    </Card>
-  )
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <Button
+          type="submit"
+          className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+          disabled={isLoading || !email || !password}
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isLoading ? 'Signing In...' : 'Sign In to Vault'}
+        </Button>
+
+        <div className="text-center">
+          <Link
+            href="/auth/forgot-password"
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors"
+          >
+            Forgot your password?
+          </Link>
+        </div>
+      </div>
+    </form>
+  );
 }
