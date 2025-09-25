@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { Heart, Clock, Eye, Gavel, Share2, Flag, ChevronLeft, ChevronRight, User, Package, Shield, MessageCircle } from 'lucide-react'
+import { Heart, Clock, Eye, Gavel, Share2, Flag, ChevronLeft, ChevronRight, User, Package, Shield, MessageCircle, TrendingUp } from 'lucide-react'
 import { Auction, Bid } from '@/types/auction'
 import { User as UserType } from '@/types/user'
 import { cn } from '@/lib/utils'
 import { formatCurrency, formatTimeRemaining, formatDate } from '@/lib/utils-extended'
 import { useSignalR } from '@/hooks/use-signalr'
+import { RealTimeBidding } from './real-time-bidding'
 
 interface AuctionDetailProps {
   auction: Auction
@@ -23,39 +24,21 @@ interface AuctionDetailProps {
 
 export function AuctionDetail({ auction, seller, bids, className }: AuctionDetailProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [bidAmount, setBidAmount] = useState('')
   const [isWatched, setIsWatched] = useState(false)
-  const [isSubmittingBid, setIsSubmittingBid] = useState(false)
-  const bidInputRef = useRef<HTMLInputElement>(null)  // Real-time updates
-  useSignalR({
-    onBidUpdate: (auctionId, bidData) => {
-      if (auctionId === auction.id) {
-        // Update auction data in real-time
-        console.log('New bid received:', bidData)
-      }
-    }
-  })
 
   const timeRemaining = formatTimeRemaining(auction.endTime)
   const isEndingSoon = new Date(auction.endTime).getTime() - Date.now() < 24 * 60 * 60 * 1000
   const isActive = auction.status === 'active'
-  const minimumBid = auction.currentBid + 1 // TODO: Calculate proper increment
-
-  useEffect(() => {
-    if (bidInputRef.current && !bidAmount) {
-      setBidAmount(minimumBid.toString())
-    }
-  }, [minimumBid, bidAmount])
 
   const handlePreviousImage = () => {
     setCurrentImageIndex(prev =>
-      prev === 0 ? auction.images.length - 1 : prev - 1
+      prev === 0 ? (auction.images?.length || 1) - 1 : prev - 1
     )
   }
 
   const handleNextImage = () => {
     setCurrentImageIndex(prev =>
-      prev === auction.images.length - 1 ? 0 : prev + 1
+      prev === (auction.images?.length || 1) - 1 ? 0 : prev + 1
     )
   }
 
@@ -118,21 +101,21 @@ export function AuctionDetail({ auction, seller, bids, className }: AuctionDetai
 
   return (
     <div className={cn("max-w-7xl mx-auto p-6", className)}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
         {/* Image Gallery */}
         <div className="space-y-4">
           <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
-            {auction.images[currentImageIndex] && (
+            {auction.images?.[currentImageIndex] && (
               <Image
-                src={auction.images[currentImageIndex].url}
-                alt={auction.images[currentImageIndex].alt || auction.title}
+                src={auction.images?.[currentImageIndex]?.url || ''}
+                alt={auction.images?.[currentImageIndex]?.alt || auction.title}
                 fill
                 className="object-cover"
                 priority
               />
             )}
 
-            {auction.images.length > 1 && (
+            {(auction.images?.length || 0) > 1 && (
               <>
                 <Button
                   variant="secondary"
@@ -154,17 +137,17 @@ export function AuctionDetail({ auction, seller, bids, className }: AuctionDetai
             )}
 
             {/* Image Counter */}
-            {auction.images.length > 1 && (
+            {(auction.images?.length || 0) > 1 && (
               <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-                {currentImageIndex + 1} / {auction.images.length}
+                {currentImageIndex + 1} / {auction.images?.length || 0}
               </div>
             )}
           </div>
 
           {/* Thumbnail Strip */}
-          {auction.images.length > 1 && (
+          {(auction.images?.length || 0) > 1 && (
             <div className="flex gap-2 overflow-x-auto">
-              {auction.images.map((image, index) => (
+              {(auction.images || []).map((image, index) => (
                 <button
                   key={image.id}
                   onClick={() => setCurrentImageIndex(index)}
@@ -253,35 +236,6 @@ export function AuctionDetail({ auction, seller, bids, className }: AuctionDetai
               </div>
             )}
 
-            {isActive && (
-              <div id="bid">
-                <Separator className="my-4" />
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Place Your Bid</p>
-                  <div className="flex gap-2">
-                    <Input
-                      ref={bidInputRef}
-                      type="number"
-                      placeholder={`Min: ${formatCurrency(minimumBid)}`}
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
-                      min={minimumBid}
-                      step="1"
-                    />
-                    <Button
-                      onClick={handleBidSubmit}
-                      disabled={isSubmittingBid || !bidAmount}
-                      className="whitespace-nowrap"
-                    >
-                      {isSubmittingBid ? 'Placing...' : 'Place Bid'}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-600">
-                    Minimum bid: {formatCurrency(minimumBid)}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Stats */}
@@ -350,33 +304,21 @@ export function AuctionDetail({ auction, seller, bids, className }: AuctionDetai
             </div>
           </div>
 
-          {/* Bid History */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Bid History</h2>
-            <div className="space-y-2">
-              {bids.length === 0 ? (
-                <p className="text-gray-600">No bids yet. Be the first to bid!</p>
-              ) : (
-                bids.slice(0, 10).map((bid) => (
-                  <div key={bid.id} className="flex items-center justify-between py-2 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
-                      <span className="font-medium">Bidder {bid.bidderId.slice(-4)}</span>
-                      {bid.isAutoBid && (
-                        <Badge variant="outline" className="text-xs">Auto</Badge>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(bid.amount)}</p>
-                      <p className="text-sm text-gray-600">{formatDate(bid.timestamp)}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
 
+        {/* Real-Time Bidding */}
+        <div className="xl:col-span-1">
+          <RealTimeBidding
+            auctionId={auction.id}
+            currentBid={auction.currentBid}
+            minimumBidIncrement={1}
+            endTime={auction.endTime}
+          />
+        </div>
+      </div>
+
+      {/* Additional Details Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Shipping and Details */}
         <div className="space-y-6">
           <div>
@@ -413,6 +355,48 @@ export function AuctionDetail({ auction, seller, bids, className }: AuctionDetai
               <div className="flex justify-between">
                 <span>Ends:</span>
                 <span>{formatDate(auction.endTime)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Seller Information */}
+        <div className="space-y-6">
+          <div>
+            <h3 className="font-semibold mb-3">Seller Information</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                  <User className="h-5 w-5 text-gray-600" />
+                </div>
+                <div>
+                  <p className="font-medium">{seller.username}</p>
+                  <p className="text-sm text-gray-600">Member since {formatDate(seller.createdAt)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                  <span>98% positive feedback</span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Contact Seller
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-3">Trust & Safety</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-green-600" />
+                <span>Verified seller</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-blue-600" />
+                <span>Fast shipping guarantee</span>
               </div>
             </div>
           </div>

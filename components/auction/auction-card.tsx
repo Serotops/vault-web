@@ -26,7 +26,7 @@ export function AuctionCard({
   const [isWatchedState, setIsWatchedState] = useState(isWatched)
   const [isImageLoading, setIsImageLoading] = useState(true)
 
-  const primaryImage = auction.images[0]
+  const primaryImage = auction.images?.[0]
   const timeRemaining = formatTimeRemaining(auction.endTime)
   const isEndingSoon = new Date(auction.endTime).getTime() - Date.now() < 24 * 60 * 60 * 1000
 

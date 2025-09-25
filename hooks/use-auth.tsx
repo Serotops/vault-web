@@ -4,7 +4,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AuthUser, LoginRequest, RegisterRequest } from '@/types';
-import { authUtils } from '@/lib/auth-utils';
 import { apiClient } from '@/lib/api-client';
 
 interface AuthState {
@@ -66,7 +65,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 interface AuthContextType extends AuthState {
   login: (credentials: LoginRequest) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -85,67 +84,150 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper functions for localStorage operations
+const getUserFromStorage = (): AuthUser | null => {
+  if (typeof window === 'undefined') return null;
+  const userData = localStorage.getItem('user');
+  return userData ? JSON.parse(userData) : null;
+};
+
+const setUserInStorage = (user: AuthUser): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
+const isTokenValid = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const tokenExpiry = localStorage.getItem('tokenExpiry');
+  if (!tokenExpiry) return false;
+  return Date.now() < parseInt(tokenExpiry);
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   // Initialize auth state on mount
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = authUtils.getTokenFromStorage();
-      const user = authUtils.getUserFromStorage();
+      try {
+        const tokens = apiClient.getTokens();
+        const user = getUserFromStorage();
 
-      if (token && user && !authUtils.isTokenExpired(token)) {
-        dispatch({ type: 'AUTH_SUCCESS', payload: user });
-      } else {
-        authUtils.clearAuthData();
+        if (tokens?.accessToken && user && isTokenValid()) {
+          dispatch({ type: 'AUTH_SUCCESS', payload: user });        } else if (tokens?.refreshToken) {
+          // Try to refresh the token
+          try {
+            const tokenResponse = await apiClient.refreshToken(tokens.refreshToken);
+            apiClient.setAuthTokens(tokenResponse);
+            
+            // Create AuthUser from refresh response
+            const authUser: AuthUser = {
+              id: tokenResponse.userId,
+              username: tokenResponse.email.split('@')[0], // Fallback username
+              email: tokenResponse.email,
+              token: tokenResponse.accessToken,
+              refreshToken: tokenResponse.refreshToken,
+              expiresAt: new Date(tokenResponse.accessTokenExpiration),
+            };
+            
+            setUserInStorage(authUser);
+            dispatch({ type: 'AUTH_SUCCESS', payload: authUser });
+          } catch (error) {
+            // Refresh failed, clear auth data
+            apiClient.clearAuth();
+            dispatch({ type: 'AUTH_LOGOUT' });
+          }
+        } else {
+          // No valid tokens, clear auth data
+          apiClient.clearAuth();
+          dispatch({ type: 'AUTH_LOGOUT' });
+        }
+      } catch (error) {
+        // Error during initialization, clear auth data
+        apiClient.clearAuth();
         dispatch({ type: 'AUTH_LOGOUT' });
       }
     };
 
     initializeAuth();
   }, []);
-
   const login = async (credentials: LoginRequest): Promise<void> => {
     try {
       dispatch({ type: 'AUTH_START' });
       
-      const response = await apiClient.post<AuthUser>('/auth/login', credentials);
+      const tokenResponse = await apiClient.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
       
-      if (response.success && response.data) {
-        authUtils.setTokenInStorage(response.data.token);
-        authUtils.setUserInStorage(response.data);
-        dispatch({ type: 'AUTH_SUCCESS', payload: response.data });
-      } else {
-        throw new Error(response.message || 'Login failed');
-      }
+      // Store tokens
+      apiClient.setAuthTokens(tokenResponse);
+      
+      // Create AuthUser from token response
+      const authUser: AuthUser = {
+        id: tokenResponse.userId,
+        username: tokenResponse.email.split('@')[0], // Use email prefix as username fallback
+        email: tokenResponse.email,
+        token: tokenResponse.accessToken,
+        refreshToken: tokenResponse.refreshToken,
+        expiresAt: new Date(tokenResponse.accessTokenExpiration),
+      };
+      
+      setUserInStorage(authUser);
+      dispatch({ type: 'AUTH_SUCCESS', payload: authUser });
     } catch (error: any) {
-      dispatch({ type: 'AUTH_ERROR', payload: error.message || 'Login failed' });
-      throw error;
+      const errorMessage = error.message || 'Login failed';
+      dispatch({ type: 'AUTH_ERROR', payload: errorMessage });
+      throw new Error(errorMessage);
     }
   };
-
   const register = async (userData: RegisterRequest): Promise<void> => {
     try {
       dispatch({ type: 'AUTH_START' });
       
-      const response = await apiClient.post<AuthUser>('/auth/register', userData);
+      const tokenResponse = await apiClient.register({
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        username: userData.username,
+        email: userData.email,
+        password: userData.password,
+        acceptTerms: userData.acceptTerms,
+      });
       
-      if (response.success && response.data) {
-        authUtils.setTokenInStorage(response.data.token);
-        authUtils.setUserInStorage(response.data);
-        dispatch({ type: 'AUTH_SUCCESS', payload: response.data });
-      } else {
-        throw new Error(response.message || 'Registration failed');
-      }
+      // Store tokens
+      apiClient.setAuthTokens(tokenResponse);
+      
+      // Create AuthUser from token response
+      const authUser: AuthUser = {
+        id: tokenResponse.userId,
+        username: userData.username,
+        email: tokenResponse.email,
+        token: tokenResponse.accessToken,
+        refreshToken: tokenResponse.refreshToken,
+        expiresAt: new Date(tokenResponse.accessTokenExpiration),
+      };
+      
+      setUserInStorage(authUser);
+      dispatch({ type: 'AUTH_SUCCESS', payload: authUser });
     } catch (error: any) {
-      dispatch({ type: 'AUTH_ERROR', payload: error.message || 'Registration failed' });
-      throw error;
+      const errorMessage = error.message || 'Registration failed';
+      dispatch({ type: 'AUTH_ERROR', payload: errorMessage });
+      throw new Error(errorMessage);
     }
   };
 
-  const logout = (): void => {
-    authUtils.clearAuthData();
-    dispatch({ type: 'AUTH_LOGOUT' });
+  const logout = async (): Promise<void> => {
+    try {
+      // Call backend logout endpoint
+      await apiClient.logout();
+    } catch (error) {
+      // Continue with logout even if backend call fails
+      console.warn('Logout API call failed:', error);
+    } finally {
+      // Clear local auth data
+      apiClient.clearAuth();
+      dispatch({ type: 'AUTH_LOGOUT' });
+    }
   };
 
   const clearError = (): void => {
@@ -154,15 +236,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshUser = async (): Promise<void> => {
     try {
-      const response = await apiClient.get<AuthUser>('/auth/me');
+      const currentUser = await apiClient.getCurrentUser();
+      const existingUser = getUserFromStorage();
       
-      if (response.success && response.data) {
-        authUtils.setUserInStorage(response.data);
-        dispatch({ type: 'AUTH_SUCCESS', payload: response.data });
+      if (existingUser) {
+        const updatedUser: AuthUser = {
+          ...existingUser,
+          id: currentUser.userId,
+          email: currentUser.email,
+        };
+        
+        setUserInStorage(updatedUser);
+        dispatch({ type: 'AUTH_SUCCESS', payload: updatedUser });
       }
     } catch (error) {
       // If refresh fails, logout the user
-      logout();
+      await logout();
     }
   };
 

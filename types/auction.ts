@@ -12,7 +12,7 @@ export interface Auction {
   endTime: Date;
   sellerId: string;
   status: AuctionStatus;
-  images: AuctionImage[];
+  images?: AuctionImage[];
   bidCount: number;
   watchers: number;
   shippingInfo: ShippingInfo;
@@ -24,10 +24,51 @@ export interface Bid {
   id: string;
   auctionId: string;
   bidderId: string;
+  bidderName?: string;
   amount: number;
   timestamp: Date;
   isAutoBid: boolean;
   maxBidAmount?: number;
+}
+
+// Real-time bidding types
+export interface BidDto {
+  id: string;
+  auctionId: string;
+  bidderId: string;
+  bidderName: string;
+  amount: number;
+  timestamp: string;
+  isHighestBid: boolean;
+}
+
+export interface PlaceBidRequest {
+  auctionId: string;
+  amount: number;
+}
+
+export interface AuctionStats {
+  auctionId: string;
+  highestBid: number;
+  bidCount: number;
+  lastBidTime?: string;
+}
+
+export interface BiddingState {
+  bids: BidDto[];
+  stats: AuctionStats;
+  isLoading: boolean;
+  error: string | null;
+  isConnected: boolean;
+  typingUsers: string[];
+}
+
+// SignalR event types
+export interface SignalRBidEvents {
+  BidPlaced: (bid: BidDto) => void;
+  BidConfirmed: (bid: BidDto) => void;
+  AuctionStatsUpdated: (stats: AuctionStats) => void;
+  UserTyping: (userId: string, isTyping: boolean) => void;
 }
 
 export interface AuctionImage {

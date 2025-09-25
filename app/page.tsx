@@ -1,4 +1,4 @@
-'use client'
+  'use client'
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -7,8 +7,21 @@ import { AuctionList } from '@/components/auction/auction-list'
 import { Search, Star, Shield, Zap, Users, Clock, ChevronRight, Flame } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/use-auth';
+import { useRouter } from 'next/navigation';
 
-export default function Home() {  const [liveAuctionPulse, setLiveAuctionPulse] = useState(false)
+export default function Home() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect authenticated users to /auctions
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/auctions');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  const [liveAuctionPulse, setLiveAuctionPulse] = useState(false)
 
   // Simulate live auction activity
   useEffect(() => {

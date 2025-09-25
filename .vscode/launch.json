@@ -1,0 +1,40 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Next.js debug (dev)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/next/dist/bin/next",
+			"args": ["dev"],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"skipFiles": ["<node_internals>/**"],
+			"env": {
+				"NODE_OPTIONS": "--enable-source-maps"
+			},
+			"serverReadyAction": {
+				"pattern": "started server on .+, url: (https?://localhost:\\d+)",
+				"action": "debugWithChrome",
+				"uriFormat": "%s"
+			}
+		},
+		{
+			"name": "Next.js: Client (Chrome)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://localhost:3000",
+			"webRoot": "${workspaceFolder}",
+			"sourceMaps": true
+		},
+		{
+			"name": "Next.js: Server (attach)",
+			"type": "node",
+			"request": "attach",
+			"port": 9229,
+			"restart": true,
+			"cwd": "${workspaceFolder}",
+			"skipFiles": ["<node_internals>/**"]
+		}
+	]
+}
